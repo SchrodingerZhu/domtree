@@ -2,8 +2,14 @@
 name = "domtree"
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors = ["schrodingerzhu <yifanzhu@rochester.edu>"]
+license = "MIT"
+description = "dominance relation calculation"
+keywords = ["ssa", "graph", "dominance frontier", "dominator"]
+categories = ["algorithms", "compilers"]
+homepage = "https://github.com/schrodingerzhu/domtree"
+repository = "https://github.com/schrodingerzhu/domtree"
+readme = "README.md"
 
 [dev-dependencies]
 rand = "0.8.5"
