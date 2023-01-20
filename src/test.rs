@@ -7,6 +7,7 @@ use std::hash::Hash;
 use std::iter::{Cloned, Map};
 use std::ops::Range;
 use std::slice::{Iter, IterMut};
+use crate::djgraph::DJGraph;
 
 #[derive(Clone)]
 struct VecSet<Y>(Vec<Y>);
@@ -45,6 +46,8 @@ struct Node {
     tag: usize,
     dom: Option<usize>,
     frontiers: UnsafeCell<HashMemberSet<usize>>,
+    j_edges: UnsafeCell<HashMemberSet<usize>>,
+    d_edges: UnsafeCell<HashMemberSet<usize>>,
     incoming_edges: Vec<usize>,
     outgoing_edges: Vec<usize>,
 }
@@ -64,6 +67,8 @@ impl Graph {
                 frontiers: HashMemberSet(HashSet::new()).into(),
                 incoming_edges: Vec::new(),
                 outgoing_edges: Vec::new(),
+                d_edges: HashMemberSet(HashSet::new()).into(),
+                j_edges: HashMemberSet(HashSet::new()).into(),
             })
         }
         Self { nodes }
@@ -112,6 +117,27 @@ impl DomTree for Graph {
 
     fn doms_mut<'a>(&'a mut self) -> Self::MutDomIter<'a> {
         self.nodes.iter_mut().map(|x| &mut x.dom)
+    }
+}
+
+impl DJGraph for Graph {
+    type EdgeSet = HashMemberSet<Self::Identifier>;
+    type NodeIter<'a> = Map<Iter<'a, Node>, fn(&'a Node)->usize> where Self: 'a;
+
+    fn create_edge_set(&self) -> Self::EdgeSet {
+        HashMemberSet(HashSet::new())
+    }
+
+    fn node_iter<'a>(&'a self) -> Self::NodeIter<'a> {
+        self.nodes.iter().map(|x|x.tag)
+    }
+
+    fn d_edge_cell(&self, id: Self::Identifier) -> &UnsafeCell<Self::EdgeSet> {
+        &self.nodes[id].d_edges
+    }
+
+    fn j_edge_cell(&self, id: Self::Identifier) -> &UnsafeCell<Self::EdgeSet> {
+        &self.nodes[id].j_edges
     }
 }
 
@@ -201,11 +227,11 @@ fn dump_graph(g: &Graph) {
 fn dump_dom(g: &Graph) {
     println!("digraph G {{");
     for i in g.nodes.iter() {
-        if i.tag == 0 {
-            continue;
+        for j in g.d_edge_iter(i.tag) {
+            println!("\t{} -> {};", i.tag, j);
         }
-        if let Some(x) = g.dom(i.tag) {
-            println!("\t{} -> {};", x, i.tag);
+        for j in g.j_edge_iter(i.tag) {
+            println!("\t{} -> {} [style=\"dashed\"];", i.tag, j);
         }
     }
     println!("}}");
@@ -248,6 +274,24 @@ fn test_frontiers_calculation() {
 }
 
 #[test]
+fn test_frontiers_with_dj_graph() {
+    let mut g = random_graph(10000);
+    dump_graph(&g);
+    g.populate_dom(0);
+    g.populate_frontiers();
+    g.populate_d_edges();
+    g.populate_j_edges();
+    let depths = g.dom_dfs_depths(0);
+    for i in g.nodes.iter() {
+        let mut x : Vec<usize> = g.dj_dom_frontiers(&depths, i.tag).iter().collect();
+        x.sort();
+        let mut y : Vec<usize> = g.frontiers(i.tag).iter().collect();
+        y.sort();
+        assert_eq!(x, y, "node: {}", i.tag);
+    }
+}
+
+#[test]
 fn test_example() {
     let mut g = Graph::new(12);
     g.connect(0, 1);
@@ -266,5 +310,7 @@ fn test_example() {
     g.connect(9, 10);
     g.connect(10, 8);
     g.populate_dom(0);
+    g.populate_d_edges();
+    g.populate_j_edges();
     dump_dom(&g);
 }

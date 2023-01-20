@@ -113,12 +113,12 @@ use crate::set::AssocSet;
 
 /// DFS related interfaces.
 pub mod dfs;
+/// DJ graphs
+pub mod djgraph;
 /// Domaination frontiers
 pub mod frontier;
 /// Housekeeping data structure interfaces.
 pub mod set;
-/// DJ graphs
-pub mod djgraph;
 
 #[cfg(test)]
 mod test;
