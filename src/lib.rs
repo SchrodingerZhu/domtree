@@ -1,3 +1,4 @@
+#![feature(associated_type_bounds)]
 //! `domtree` provides facilities a generic implementation to calculate the dominator tree of
 //! a directed graph. The algorithm basically follows the description in
 //! "A Simple, Fast Dominance Algorithm" by Keith D. Cooper, Timothy J. Harvey, and Ken Kennedy.

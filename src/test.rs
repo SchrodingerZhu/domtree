@@ -1,7 +1,8 @@
 use crate::dfs::DFSGraph;
-use crate::djgraph::DJGraph;
-use crate::set::{AssocSet, MemberSet};
+use crate::djgraph::{DJGraph, MaterializedIDF};
+use crate::set::{AssocSet, MemberSet, MergeSet};
 use crate::{frontier::DominanceFrontier, DomTree};
+use rand::{thread_rng, Rng};
 use std::cell::UnsafeCell;
 use std::collections::{BTreeSet, HashSet};
 use std::hash::Hash;
@@ -22,7 +23,7 @@ impl<Y: Clone + Default> AssocSet<usize, Y> for VecSet<Y> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 struct HashMemberSet<T>(HashSet<T>);
 
 impl<T: PartialEq + Eq + Hash + Clone> MemberSet<T> for HashMemberSet<T> {
@@ -41,6 +42,26 @@ impl<T: PartialEq + Eq + Hash + Clone> MemberSet<T> for HashMemberSet<T> {
     }
 }
 
+impl<T: PartialEq + Eq + Hash + Clone> MergeSet<T> for HashMemberSet<T> {
+    fn subset(&self, other: &Self) -> bool {
+        self.0.is_subset(&other.0)
+    }
+
+    fn union(&mut self, other: &Self) {
+        for i in other.0.iter().cloned() {
+            self.0.insert(i);
+        }
+    }
+}
+
+impl MaterializedIDF for Graph {
+    type MergeNodeSet = HashMemberSet<usize>;
+
+    fn idf_cell(&self, id: Self::Identifier) -> &UnsafeCell<Self::MergeNodeSet> {
+        &self.nodes[id].idfs
+    }
+}
+
 #[derive(Debug)]
 struct Node {
     tag: usize,
@@ -48,6 +69,7 @@ struct Node {
     frontiers: UnsafeCell<HashMemberSet<usize>>,
     j_edges: UnsafeCell<HashMemberSet<usize>>,
     d_edges: UnsafeCell<HashMemberSet<usize>>,
+    idfs: UnsafeCell<HashMemberSet<usize>>,
     incoming_edges: Vec<usize>,
     outgoing_edges: Vec<usize>,
 }
@@ -69,6 +91,7 @@ impl Graph {
                 outgoing_edges: Vec::new(),
                 d_edges: HashMemberSet(HashSet::new()).into(),
                 j_edges: HashMemberSet(HashSet::new()).into(),
+                idfs: HashMemberSet(HashSet::new()).into(),
             })
         }
         Self { nodes }
@@ -219,9 +242,7 @@ impl Graph {
     }
 }
 
-fn random_graph(n: usize) -> Graph {
-    use rand::*;
-    let mut rng = thread_rng();
+fn random_graph<R: Rng>(rng: &mut R, n: usize) -> Graph {
     let mut g = Graph::new(n);
     let mut edges = HashSet::new();
     for i in 0..n - 1 {
@@ -265,7 +286,7 @@ fn dump_dom(g: &Graph) {
 
 #[test]
 fn test_dom_tree_calculation() {
-    let mut g = random_graph(2000);
+    let mut g = random_graph(&mut thread_rng(), 2000);
     dump_graph(&g);
     g.populate_dom(0);
 
@@ -281,7 +302,7 @@ fn test_dom_tree_calculation() {
 
 #[test]
 fn test_frontiers_calculation() {
-    let mut g = random_graph(10000);
+    let mut g = random_graph(&mut thread_rng(), 10000);
     dump_graph(&g);
     g.populate_dom(0);
     g.populate_frontiers();
@@ -301,7 +322,7 @@ fn test_frontiers_calculation() {
 
 #[test]
 fn test_frontiers_with_dj_graph() {
-    let mut g = random_graph(10000);
+    let mut g = random_graph(&mut thread_rng(), 10000);
     dump_graph(&g);
     g.populate_dom(0);
     g.populate_frontiers();
@@ -319,7 +340,7 @@ fn test_frontiers_with_dj_graph() {
 
 #[test]
 fn test_iterated_frontiers() {
-    let mut g = random_graph(10000);
+    let mut g = random_graph(&mut thread_rng(), 10000);
     dump_graph(&g);
     g.populate_dom(0);
     g.populate_frontiers();
@@ -331,6 +352,22 @@ fn test_iterated_frontiers() {
     let x = g.iterate_df(&set);
     let y = g.iterated_frontiers(&depths, &set);
     assert_eq!(x.0, y.0);
+}
+
+#[test]
+fn test_materialized_iterated_frontiers() {
+    let mut g = random_graph(&mut thread_rng(), 500);
+    dump_graph(&g);
+    g.populate_dom(0);
+    g.populate_frontiers();
+    g.populate_d_edges();
+    g.populate_j_edges();
+    g.populate_idf(0);
+    let depths = g.dom_dfs_depths(0);
+    for i in g.nodes.iter() {
+        let x = g.iterated_frontiers(&depths, &HashMemberSet([i.tag].into()));
+        assert_eq!(x.0, g.ref_idf(i.tag).0, "node: {}", i.tag);
+    }
 }
 
 #[test]

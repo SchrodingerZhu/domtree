@@ -21,3 +21,9 @@ pub trait MemberSet<T> {
     /// uniqueness of its member on itself.
     fn insert(&mut self, target: T);
 }
+
+/// Membership set. This is used to maintain the dominance frontiers.
+pub trait MergeSet<T>: MemberSet<T> {
+    fn subset(&self, other: &Self) -> bool;
+    fn union(&mut self, other: &Self);
+}

@@ -17,12 +17,32 @@ impl<Y: Clone + Default> AssocSet<usize, Y> for VecSet<Y> {
 }
 #[derive(Clone, Debug)]
 struct HashMemberSet<T>(HashSet<T>);
-impl<T : PartialEq + Eq + Hash> MemberSet<T> for HashMemberSet<T>  {
+
+impl<T: PartialEq + Eq + Hash + Clone> MemberSet<T> for HashMemberSet<T> {
     fn contains(&self, target: T) -> bool {
         self.0.contains(&target)
     }
+
     fn insert(&mut self, target: T) {
         self.0.insert(target);
+    }
+
+    type MemberIter<'a> = Cloned<std::collections::hash_set::Iter<'a, T>> where Self : 'a;
+
+    fn iter<'a>(&'a self) -> Self::MemberIter<'a> {
+        self.0.iter().cloned()
+    }
+}
+
+impl<T: PartialEq + Eq + Hash + Clone> MergeSet<T> for HashMemberSet<T> {
+    fn subset(&self, other: &Self) -> bool {
+        self.0.is_subset(&other.0)
+    }
+
+    fn union(&mut self, other: &Self) {
+        for i in other.0.iter().cloned() {
+            self.0.insert(i);
+        }
     }
 }
 #[derive(Debug)]
