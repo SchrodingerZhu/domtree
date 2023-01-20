@@ -18,14 +18,19 @@
 //! }
 //!
 //! #[derive(Clone, Debug)]
-//! struct HashMemberSet<T>(HashSet<T>);
-//! impl<T : PartialEq + Eq + Hash> MemberSet<T> for HashMemberSet<T>  {
+//! impl<T: PartialEq + Eq + Hash + Clone> MemberSet<T> for HashMemberSet<T> {
 //!     fn contains(&self, target: T) -> bool {
 //!         self.0.contains(&target)
 //!     }
 //!
 //!     fn insert(&mut self, target: T) {
 //!         self.0.insert(target);
+//!     }
+//!
+//!     type MemberIter<'a> = Cloned<std::collections::hash_set::Iter<'a, T>> where Self : 'a;
+//!
+//!     fn iter<'a>(&'a self) -> Self::MemberIter<'a> {
+//!         self.0.iter().cloned()
 //!     }
 //! }
 //!
@@ -113,9 +118,9 @@ use crate::set::AssocSet;
 
 /// DFS related interfaces.
 pub mod dfs;
-/// DJ graphs
+/// DJ graphs.
 pub mod djgraph;
-/// Domaination frontiers
+/// Domaination frontiers.
 pub mod frontier;
 /// Housekeeping data structure interfaces.
 pub mod set;

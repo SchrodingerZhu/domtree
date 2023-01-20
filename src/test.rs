@@ -150,7 +150,7 @@ impl DJGraph for Graph {
     type NodeSet = HashMemberSet<Self::Identifier>;
     type NodeIter<'a> = Map<Iter<'a, Node>, fn(&'a Node)->usize> where Self: 'a;
 
-    fn create_edge_set(&self) -> Self::NodeSet {
+    fn create_node_set(&self) -> Self::NodeSet {
         HashMemberSet(HashSet::new())
     }
 
