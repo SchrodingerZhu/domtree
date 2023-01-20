@@ -1,4 +1,5 @@
 use crate::dfs::DFSGraph;
+use crate::djgraph::DJGraph;
 use crate::set::{AssocSet, MemberSet};
 use crate::{frontier::DominanceFrontier, DomTree};
 use std::cell::UnsafeCell;
@@ -7,7 +8,6 @@ use std::hash::Hash;
 use std::iter::{Cloned, Map};
 use std::ops::Range;
 use std::slice::{Iter, IterMut};
-use crate::djgraph::DJGraph;
 
 #[derive(Clone)]
 struct VecSet<Y>(Vec<Y>);
@@ -74,6 +74,32 @@ impl Graph {
         Self { nodes }
     }
 
+    fn iterate_df(&self, set: &HashMemberSet<usize>) -> HashMemberSet<usize> {
+        let mut closure = HashMemberSet(HashSet::new());
+        let mut changed = true;
+        for i in set.iter() {
+            for j in self.frontiers(i).iter() {
+                closure.insert(j);
+            }
+        }
+        while changed {
+            changed = false;
+            let mut change_set = Vec::new();
+            for i in closure.iter() {
+                for j in self.frontiers(i).iter() {
+                    if !closure.contains(j) {
+                        changed = true;
+                        change_set.push(j);
+                    }
+                }
+            }
+            for i in change_set {
+                closure.insert(i)
+            }
+        }
+        return closure;
+    }
+
     fn connect(&mut self, x: usize, y: usize) {
         self.nodes[x].outgoing_edges.push(y);
         self.nodes[y].incoming_edges.push(x);
@@ -121,22 +147,22 @@ impl DomTree for Graph {
 }
 
 impl DJGraph for Graph {
-    type EdgeSet = HashMemberSet<Self::Identifier>;
+    type NodeSet = HashMemberSet<Self::Identifier>;
     type NodeIter<'a> = Map<Iter<'a, Node>, fn(&'a Node)->usize> where Self: 'a;
 
-    fn create_edge_set(&self) -> Self::EdgeSet {
+    fn create_edge_set(&self) -> Self::NodeSet {
         HashMemberSet(HashSet::new())
     }
 
     fn node_iter<'a>(&'a self) -> Self::NodeIter<'a> {
-        self.nodes.iter().map(|x|x.tag)
+        self.nodes.iter().map(|x| x.tag)
     }
 
-    fn d_edge_cell(&self, id: Self::Identifier) -> &UnsafeCell<Self::EdgeSet> {
+    fn d_edge_cell(&self, id: Self::Identifier) -> &UnsafeCell<Self::NodeSet> {
         &self.nodes[id].d_edges
     }
 
-    fn j_edge_cell(&self, id: Self::Identifier) -> &UnsafeCell<Self::EdgeSet> {
+    fn j_edge_cell(&self, id: Self::Identifier) -> &UnsafeCell<Self::NodeSet> {
         &self.nodes[id].j_edges
     }
 }
@@ -283,12 +309,28 @@ fn test_frontiers_with_dj_graph() {
     g.populate_j_edges();
     let depths = g.dom_dfs_depths(0);
     for i in g.nodes.iter() {
-        let mut x : Vec<usize> = g.dj_dom_frontiers(&depths, i.tag).iter().collect();
+        let mut x: Vec<usize> = g.dj_dom_frontiers(&depths, i.tag).iter().collect();
         x.sort();
-        let mut y : Vec<usize> = g.frontiers(i.tag).iter().collect();
+        let mut y: Vec<usize> = g.frontiers(i.tag).iter().collect();
         y.sort();
         assert_eq!(x, y, "node: {}", i.tag);
     }
+}
+
+#[test]
+fn test_iterated_frontiers() {
+    let mut g = random_graph(10000);
+    dump_graph(&g);
+    g.populate_dom(0);
+    g.populate_frontiers();
+    g.populate_d_edges();
+    g.populate_j_edges();
+    let depths = g.dom_dfs_depths(0);
+    let indices = rand::seq::index::sample(&mut rand::thread_rng(), g.nodes.len(), 2000);
+    let set = HashMemberSet(indices.iter().collect());
+    let x = g.iterate_df(&set);
+    let y = g.iterated_frontiers(&depths, &set);
+    assert_eq!(x.0, y.0);
 }
 
 #[test]
@@ -313,4 +355,7 @@ fn test_example() {
     g.populate_d_edges();
     g.populate_j_edges();
     dump_dom(&g);
+    let depths = g.dom_dfs_depths(0);
+    let df = g.iterated_frontiers(&depths, &HashMemberSet([1, 3, 4, 7].into_iter().collect()));
+    assert_eq!(df.0, [2, 5, 6].into());
 }
