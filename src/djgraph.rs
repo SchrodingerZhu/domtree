@@ -222,6 +222,10 @@ pub trait MaterializedIDF: DJGraph<Identifier: Hash> {
         result
     }
     /// Calculate the IDFs for all nodes. Better call [`DJGraph::populate_d_edges`] first.
+    /// At each node, this should give the same result of [`DJGraph::iterated_frontiers`]. However,
+    /// this method calculate all nodes in one batch. Notice that this method may not be faster than
+    /// calling [`DJGraph::iterated_frontiers`] for each node based on the performance of
+    /// underlying the [`MergeSet`] implementation.
     fn populate_idf(&mut self, root: Self::Identifier) {
         fn tdmsc<G: MaterializedIDF>(
             graph: &G,
