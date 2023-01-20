@@ -8,8 +8,13 @@ pub trait AssocSet<X, Y: Clone + Default> {
 
 /// Membership set. This is used to maintain the dominance frontiers.
 pub trait MemberSet<T> {
+    type MemberIter<'a> : Iterator<Item = T> where Self : 'a;
     /// Check if the set contains a target.
     fn contains(&self, target: T) -> bool;
+
+    /// Iterate all members
+    fn iter<'a>(&'a self) -> Self::MemberIter<'a>;
+    
     /// Insert a new element to the set. The data structure is expected to maintain the
     /// uniqueness of its member on itself.
     fn insert(&mut self, target: T);

@@ -117,6 +117,8 @@ pub mod dfs;
 pub mod frontier;
 /// Housekeeping data structure interfaces.
 pub mod set;
+/// DJ graphs
+pub mod djgraph;
 
 #[cfg(test)]
 mod test;
