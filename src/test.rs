@@ -1,6 +1,6 @@
 use crate::dfs::DFSGraph;
 use crate::set::{AssocSet, MemberSet};
-use crate::{DomTree, DominanceFrontier};
+use crate::{frontier::DominanceFrontier, DomTree};
 use std::cell::UnsafeCell;
 use std::collections::{BTreeSet, HashSet};
 use std::hash::Hash;
@@ -192,6 +192,19 @@ fn dump_graph(g: &Graph) {
     println!("}}");
 }
 
+fn dump_dom(g: &Graph) {
+    println!("digraph G {{");
+    for i in g.nodes.iter() {
+        if i.tag == 0 {
+            continue;
+        }
+        if let Some(x) = g.dom(i.tag) {
+            println!("\t{} -> {};", x, i.tag);
+        }
+    }
+    println!("}}");
+}
+
 #[test]
 fn test_dom_tree_calculation() {
     let mut g = random_graph(2000);
@@ -226,4 +239,26 @@ fn test_frontiers_calculation() {
             )
         }
     }
+}
+
+#[test]
+fn test_example() {
+    let mut g = Graph::new(12);
+    g.connect(0, 1);
+    g.connect(1, 2);
+    g.connect(2, 3);
+    g.connect(2, 11);
+    g.connect(3, 4);
+    g.connect(3, 8);
+    g.connect(4, 5);
+    g.connect(5, 6);
+    g.connect(6, 5);
+    g.connect(6, 7);
+    g.connect(7, 2);
+    g.connect(8, 9);
+    g.connect(9, 6);
+    g.connect(9, 10);
+    g.connect(10, 8);
+    g.populate_dom(0);
+    dump_dom(&g);
 }
