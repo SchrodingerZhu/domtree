@@ -1,4 +1,5 @@
-//! `domtree` provides facilities a generic implementation to calculate the dominator tree of
+#![cfg_attr(feature = "materialized_idf", feature(associated_type_bounds))]
+//! `domtree` provides a generic implementation to calculate the dominator tree of
 //! a directed graph. The algorithm basically follows the description in
 //! "A Simple, Fast Dominance Algorithm" by Keith D. Cooper, Timothy J. Harvey, and Ken Kennedy.
 //!
@@ -18,14 +19,19 @@
 //! }
 //!
 //! #[derive(Clone, Debug)]
-//! struct HashMemberSet<T>(HashSet<T>);
-//! impl<T : PartialEq + Eq + Hash> MemberSet<T> for HashMemberSet<T>  {
+//! impl<T: PartialEq + Eq + Hash + Clone> MemberSet<T> for HashMemberSet<T> {
 //!     fn contains(&self, target: T) -> bool {
 //!         self.0.contains(&target)
 //!     }
 //!
 //!     fn insert(&mut self, target: T) {
 //!         self.0.insert(target);
+//!     }
+//!
+//!     type MemberIter<'a> = Cloned<std::collections::hash_set::Iter<'a, T>> where Self : 'a;
+//!
+//!     fn iter<'a>(&'a self) -> Self::MemberIter<'a> {
+//!         self.0.iter().cloned()
 //!     }
 //! }
 //!
@@ -109,11 +115,17 @@
 //! g.populate_frontiers();
 //! ```
 use crate::dfs::DFSGraph;
-use crate::set::{AssocSet, MemberSet};
-use std::cell::UnsafeCell;
+use crate::set::AssocSet;
 
 /// DFS related interfaces.
 pub mod dfs;
+/// DJ graphs.
+pub mod djgraph;
+/// Domaination frontiers.
+pub mod frontier;
+#[cfg(feature = "materialized_idf")]
+/// Materialized IDF support.
+pub mod materialized_idf;
 /// Housekeeping data structure interfaces.
 pub mod set;
 
@@ -155,10 +167,10 @@ pub trait DomTree: DFSGraph + Sized {
     /// Updates the immediate dominator identifier of the given node.
     fn set_dom(&mut self, id: Self::Identifier, target: Option<Self::Identifier>);
     /// Returns an iterator over the incoming edges of the given node.
-    fn predecessor_iter<'a>(&'a self, id: Self::Identifier) -> Self::PredecessorIter<'a>;
+    fn predecessor_iter(&self, id: Self::Identifier) -> Self::PredecessorIter<'_>;
     /// Returns an iterator over all nodes which yields the mutable references to their immediate
     /// dominator identifiers.
-    fn doms_mut<'a>(&'a mut self) -> Self::MutDomIter<'a>;
+    fn doms_mut(&mut self) -> Self::MutDomIter<'_>;
     /// Returns an iterator over all the **strict** dominators of a node.
     fn dom_iter(&self, id: Self::Identifier) -> DominatorIter<Self> {
         DominatorIter {
@@ -187,7 +199,7 @@ pub trait DomTree: DFSGraph + Sized {
                     }
                 }
             }
-            return x;
+            x
         }
         // initialize all immediate dominators to None.
         self.doms_mut().for_each(|x| *x = None);
@@ -211,8 +223,7 @@ pub trait DomTree: DFSGraph + Sized {
                 }
                 let dom = unsafe {
                     self.predecessor_iter(i)
-                        .filter(|x| post_order_map.get(*x) > order)
-                        .next()
+                        .find(|x| post_order_map.get(*x) > order)
                         // safe because we are processing in reverse post order.
                         .unwrap_unchecked()
                 };
@@ -224,50 +235,6 @@ pub trait DomTree: DFSGraph + Sized {
                 if self.dom(i).map(|x| x != dom).unwrap_or(true) {
                     self.set_dom(i, Some(dom));
                     changed = true;
-                }
-            }
-        }
-    }
-}
-
-/// Interfaces related to dominance frontier calculation
-pub trait DominanceFrontier: DomTree {
-    /// [`Self::FrontierSet`] is used to maintain the dominance frontier.
-    /// Each node should hold a separate [`Self::FrontierSet`].
-    type FrontierSet: MemberSet<Self::Identifier>;
-    /// [`Self::NodeIter`] is an iterator over all nodes of the graph.
-    type NodeIter<'a>: Iterator<Item = Self::Identifier>
-    where
-        Self: 'a;
-    /// Due to mutable reference limitations, the trait expects [`Self::FrontierSet`] to
-    /// be wrapped in a [`UnsafeCell`] to allow iterated update. This method is used to
-    /// access the [`UnsafeCell`].
-    fn frontiers_cell(&self, id: Self::Identifier) -> &UnsafeCell<Self::FrontierSet>;
-    /// A helper function that is auto derived for user to access the dominance frontiers of
-    /// the given node.
-    fn frontiers(&self, id: Self::Identifier) -> &Self::FrontierSet {
-        unsafe { &*self.frontiers_cell(id).get() }
-    }
-    /// Gets an iterator over all nodes of the graph.
-    fn node_iter<'a>(&'a self) -> Self::NodeIter<'a>;
-
-    /// Calculate the dominance frontiers of all nodes. The immediate dominators must be
-    /// calculated before calling this function. Otherwise, it will not crash but the answers can get
-    /// wrong.
-    fn populate_frontiers(&mut self) {
-        for i in self.node_iter() {
-            for mut p in self.predecessor_iter(i) {
-                if let Some(dom) = self.dom(i) {
-                    while p != dom {
-                        unsafe {
-                            (*self.frontiers_cell(p).get()).insert(i);
-                        }
-                        if let Some(pdom) = self.dom(p) {
-                            p = pdom;
-                        } else {
-                            break;
-                        }
-                    }
                 }
             }
         }

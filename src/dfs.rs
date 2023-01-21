@@ -24,7 +24,7 @@ pub trait DFSGraph {
         Y: Clone + Default;
 
     /// Get an iterator over the outgoing_edges of the given node.
-    fn outgoing_edges<'a>(&'a self, id: Self::Identifier) -> Self::SuccessorIter<'a>;
+    fn outgoing_edges(&self, id: Self::Identifier) -> Self::SuccessorIter<'_>;
 
     /// This method is automatically derived. It gives the post order sequence of the graph.
     fn post_order_sequence(&self, root: Self::Identifier) -> Vec<Self::Identifier> {
@@ -32,7 +32,7 @@ pub trait DFSGraph {
         let mut visited = self.create_set();
         let mut visitor = |i| stack.push(i);
         self.post_order_visit(&mut visited, root, &mut visitor);
-        return stack;
+        stack
     }
 
     /// This method is automatically derived. It visits the graph in post order.

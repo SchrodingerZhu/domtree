@@ -1,6 +1,12 @@
 use crate::dfs::DFSGraph;
+use crate::djgraph::DJGraph;
+#[cfg(feature = "materialized_idf")]
+use crate::materialized_idf::MaterializedIDF;
+#[cfg(feature = "materialized_idf")]
+use crate::set::MergeSet;
 use crate::set::{AssocSet, MemberSet};
-use crate::{DomTree, DominanceFrontier};
+use crate::{frontier::DominanceFrontier, DomTree};
+use rand::{thread_rng, Rng};
 use std::cell::UnsafeCell;
 use std::collections::{BTreeSet, HashSet};
 use std::hash::Hash;
@@ -21,16 +27,44 @@ impl<Y: Clone + Default> AssocSet<usize, Y> for VecSet<Y> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 struct HashMemberSet<T>(HashSet<T>);
 
-impl<T: PartialEq + Eq + Hash> MemberSet<T> for HashMemberSet<T> {
+impl<T: PartialEq + Eq + Hash + Clone> MemberSet<T> for HashMemberSet<T> {
     fn contains(&self, target: T) -> bool {
         self.0.contains(&target)
     }
 
     fn insert(&mut self, target: T) {
         self.0.insert(target);
+    }
+
+    type MemberIter<'a> = Cloned<std::collections::hash_set::Iter<'a, T>> where Self : 'a;
+
+    fn iter<'a>(&'a self) -> Self::MemberIter<'a> {
+        self.0.iter().cloned()
+    }
+}
+
+#[cfg(feature = "materialized_idf")]
+impl<T: PartialEq + Eq + Hash + Clone> MergeSet<T> for HashMemberSet<T> {
+    fn subset(&self, other: &Self) -> bool {
+        self.0.is_subset(&other.0)
+    }
+
+    fn union(&mut self, other: &Self) {
+        for i in other.0.iter().cloned() {
+            self.0.insert(i);
+        }
+    }
+}
+
+#[cfg(feature = "materialized_idf")]
+impl MaterializedIDF for Graph {
+    type MergeNodeSet = HashMemberSet<usize>;
+
+    fn idf_cell(&self, id: Self::Identifier) -> &UnsafeCell<Self::MergeNodeSet> {
+        &self.nodes[id].idfs
     }
 }
 
@@ -39,6 +73,10 @@ struct Node {
     tag: usize,
     dom: Option<usize>,
     frontiers: UnsafeCell<HashMemberSet<usize>>,
+    j_edges: UnsafeCell<HashMemberSet<usize>>,
+    d_edges: UnsafeCell<HashMemberSet<usize>>,
+    #[cfg(feature = "materialized_idf")]
+    idfs: UnsafeCell<HashMemberSet<usize>>,
     incoming_edges: Vec<usize>,
     outgoing_edges: Vec<usize>,
 }
@@ -58,9 +96,39 @@ impl Graph {
                 frontiers: HashMemberSet(HashSet::new()).into(),
                 incoming_edges: Vec::new(),
                 outgoing_edges: Vec::new(),
+                d_edges: HashMemberSet(HashSet::new()).into(),
+                j_edges: HashMemberSet(HashSet::new()).into(),
+                #[cfg(feature = "materialized_idf")]
+                idfs: HashMemberSet(HashSet::new()).into(),
             })
         }
         Self { nodes }
+    }
+
+    fn iterate_df(&self, set: &HashMemberSet<usize>) -> HashMemberSet<usize> {
+        let mut closure = HashMemberSet(HashSet::new());
+        let mut changed = true;
+        for i in set.iter() {
+            for j in self.frontiers(i).iter() {
+                closure.insert(j);
+            }
+        }
+        while changed {
+            changed = false;
+            let mut change_set = Vec::new();
+            for i in closure.iter() {
+                for j in self.frontiers(i).iter() {
+                    if !closure.contains(j) {
+                        changed = true;
+                        change_set.push(j);
+                    }
+                }
+            }
+            for i in change_set {
+                closure.insert(i)
+            }
+        }
+        return closure;
     }
 
     fn connect(&mut self, x: usize, y: usize) {
@@ -106,6 +174,27 @@ impl DomTree for Graph {
 
     fn doms_mut<'a>(&'a mut self) -> Self::MutDomIter<'a> {
         self.nodes.iter_mut().map(|x| &mut x.dom)
+    }
+}
+
+impl DJGraph for Graph {
+    type NodeSet = HashMemberSet<Self::Identifier>;
+    type NodeIter<'a> = Map<Iter<'a, Node>, fn(&'a Node)->usize> where Self: 'a;
+
+    fn create_node_set(&self) -> Self::NodeSet {
+        HashMemberSet(HashSet::new())
+    }
+
+    fn node_iter<'a>(&'a self) -> Self::NodeIter<'a> {
+        self.nodes.iter().map(|x| x.tag)
+    }
+
+    fn d_edge_cell(&self, id: Self::Identifier) -> &UnsafeCell<Self::NodeSet> {
+        &self.nodes[id].d_edges
+    }
+
+    fn j_edge_cell(&self, id: Self::Identifier) -> &UnsafeCell<Self::NodeSet> {
+        &self.nodes[id].j_edges
     }
 }
 
@@ -161,9 +250,7 @@ impl Graph {
     }
 }
 
-fn random_graph(n: usize) -> Graph {
-    use rand::*;
-    let mut rng = thread_rng();
+fn random_graph<R: Rng>(rng: &mut R, n: usize) -> Graph {
     let mut g = Graph::new(n);
     let mut edges = HashSet::new();
     for i in 0..n - 1 {
@@ -192,9 +279,22 @@ fn dump_graph(g: &Graph) {
     println!("}}");
 }
 
+fn dump_dom(g: &Graph) {
+    println!("digraph G {{");
+    for i in g.nodes.iter() {
+        for j in g.d_edge_iter(i.tag) {
+            println!("\t{} -> {};", i.tag, j);
+        }
+        for j in g.j_edge_iter(i.tag) {
+            println!("\t{} -> {} [style=\"dashed\"];", i.tag, j);
+        }
+    }
+    println!("}}");
+}
+
 #[test]
 fn test_dom_tree_calculation() {
-    let mut g = random_graph(2000);
+    let mut g = random_graph(&mut thread_rng(), 2000);
     dump_graph(&g);
     g.populate_dom(0);
 
@@ -210,7 +310,7 @@ fn test_dom_tree_calculation() {
 
 #[test]
 fn test_frontiers_calculation() {
-    let mut g = random_graph(10000);
+    let mut g = random_graph(&mut thread_rng(), 10000);
     dump_graph(&g);
     g.populate_dom(0);
     g.populate_frontiers();
@@ -226,4 +326,82 @@ fn test_frontiers_calculation() {
             )
         }
     }
+}
+
+#[test]
+fn test_frontiers_with_dj_graph() {
+    let mut g = random_graph(&mut thread_rng(), 10000);
+    dump_graph(&g);
+    g.populate_dom(0);
+    g.populate_frontiers();
+    g.populate_d_edges();
+    g.populate_j_edges();
+    let depths = g.dom_dfs_depths(0);
+    for i in g.nodes.iter() {
+        let mut x: Vec<usize> = g.dj_dom_frontiers(&depths, i.tag).iter().collect();
+        x.sort();
+        let mut y: Vec<usize> = g.frontiers(i.tag).iter().collect();
+        y.sort();
+        assert_eq!(x, y, "node: {}", i.tag);
+    }
+}
+
+#[test]
+fn test_iterated_frontiers() {
+    let mut g = random_graph(&mut thread_rng(), 10000);
+    dump_graph(&g);
+    g.populate_dom(0);
+    g.populate_frontiers();
+    g.populate_d_edges();
+    g.populate_j_edges();
+    let depths = g.dom_dfs_depths(0);
+    let indices = rand::seq::index::sample(&mut rand::thread_rng(), g.nodes.len(), 2000);
+    let set = HashMemberSet(indices.iter().collect());
+    let x = g.iterate_df(&set);
+    let y = g.iterated_frontiers(&depths, &set);
+    assert_eq!(x.0, y.0);
+}
+
+#[cfg(feature = "materialized_idf")]
+#[test]
+fn test_materialized_iterated_frontiers() {
+    let mut g = random_graph(&mut thread_rng(), 500);
+    dump_graph(&g);
+    g.populate_dom(0);
+    g.populate_frontiers();
+    g.populate_d_edges();
+    g.populate_j_edges();
+    g.populate_idf(0);
+    let depths = g.dom_dfs_depths(0);
+    for i in g.nodes.iter() {
+        let x = g.iterated_frontiers(&depths, &HashMemberSet([i.tag].into()));
+        assert_eq!(x.0, g.ref_idf(i.tag).0, "node: {}", i.tag);
+    }
+}
+
+#[test]
+fn test_example() {
+    let mut g = Graph::new(12);
+    g.connect(0, 1);
+    g.connect(1, 2);
+    g.connect(2, 3);
+    g.connect(2, 11);
+    g.connect(3, 4);
+    g.connect(3, 8);
+    g.connect(4, 5);
+    g.connect(5, 6);
+    g.connect(6, 5);
+    g.connect(6, 7);
+    g.connect(7, 2);
+    g.connect(8, 9);
+    g.connect(9, 6);
+    g.connect(9, 10);
+    g.connect(10, 8);
+    g.populate_dom(0);
+    g.populate_d_edges();
+    g.populate_j_edges();
+    dump_dom(&g);
+    let depths = g.dom_dfs_depths(0);
+    let df = g.iterated_frontiers(&depths, &HashMemberSet([1, 3, 4, 7].into_iter().collect()));
+    assert_eq!(df.0, [2, 5, 6].into());
 }
