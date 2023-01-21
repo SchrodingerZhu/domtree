@@ -11,5 +11,11 @@ homepage = "https://github.com/schrodingerzhu/domtree"
 repository = "https://github.com/schrodingerzhu/domtree"
 readme = "README.md"
 
+[features]
+materialized_idf = []
+
 [dev-dependencies]
 rand = "0.8.5"
+
+[package.metadata.docs.rs]
+all-features = true

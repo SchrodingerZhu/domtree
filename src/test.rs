@@ -1,6 +1,10 @@
 use crate::dfs::DFSGraph;
-use crate::djgraph::{DJGraph, MaterializedIDF};
-use crate::set::{AssocSet, MemberSet, MergeSet};
+use crate::djgraph::DJGraph;
+#[cfg(feature = "materialized_idf")]
+use crate::materialized_idf::MaterializedIDF;
+#[cfg(feature = "materialized_idf")]
+use crate::set::MergeSet;
+use crate::set::{AssocSet, MemberSet};
 use crate::{frontier::DominanceFrontier, DomTree};
 use rand::{thread_rng, Rng};
 use std::cell::UnsafeCell;
@@ -42,6 +46,7 @@ impl<T: PartialEq + Eq + Hash + Clone> MemberSet<T> for HashMemberSet<T> {
     }
 }
 
+#[cfg(feature = "materialized_idf")]
 impl<T: PartialEq + Eq + Hash + Clone> MergeSet<T> for HashMemberSet<T> {
     fn subset(&self, other: &Self) -> bool {
         self.0.is_subset(&other.0)
@@ -54,6 +59,7 @@ impl<T: PartialEq + Eq + Hash + Clone> MergeSet<T> for HashMemberSet<T> {
     }
 }
 
+#[cfg(feature = "materialized_idf")]
 impl MaterializedIDF for Graph {
     type MergeNodeSet = HashMemberSet<usize>;
 
@@ -69,6 +75,7 @@ struct Node {
     frontiers: UnsafeCell<HashMemberSet<usize>>,
     j_edges: UnsafeCell<HashMemberSet<usize>>,
     d_edges: UnsafeCell<HashMemberSet<usize>>,
+    #[cfg(feature = "materialized_idf")]
     idfs: UnsafeCell<HashMemberSet<usize>>,
     incoming_edges: Vec<usize>,
     outgoing_edges: Vec<usize>,
@@ -91,6 +98,7 @@ impl Graph {
                 outgoing_edges: Vec::new(),
                 d_edges: HashMemberSet(HashSet::new()).into(),
                 j_edges: HashMemberSet(HashSet::new()).into(),
+                #[cfg(feature = "materialized_idf")]
                 idfs: HashMemberSet(HashSet::new()).into(),
             })
         }
@@ -354,6 +362,7 @@ fn test_iterated_frontiers() {
     assert_eq!(x.0, y.0);
 }
 
+#[cfg(feature = "materialized_idf")]
 #[test]
 fn test_materialized_iterated_frontiers() {
     let mut g = random_graph(&mut thread_rng(), 500);

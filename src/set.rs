@@ -22,6 +22,7 @@ pub trait MemberSet<T> {
     fn insert(&mut self, target: T);
 }
 
+#[cfg(feature = "materialized_idf")]
 /// Similar to [`MemberSet`] but also provides merge operations
 pub trait MergeSet<T>: MemberSet<T> {
     /// Check subset relation.

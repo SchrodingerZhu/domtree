@@ -1,4 +1,4 @@
-#![feature(associated_type_bounds)]
+#![cfg_attr(feature = "materialized_idf", feature(associated_type_bounds))]
 //! `domtree` provides a generic implementation to calculate the dominator tree of
 //! a directed graph. The algorithm basically follows the description in
 //! "A Simple, Fast Dominance Algorithm" by Keith D. Cooper, Timothy J. Harvey, and Ken Kennedy.
@@ -123,6 +123,9 @@ pub mod dfs;
 pub mod djgraph;
 /// Domaination frontiers.
 pub mod frontier;
+#[cfg(feature = "materialized_idf")]
+/// Materialized IDF support.
+pub mod materialized_idf;
 /// Housekeeping data structure interfaces.
 pub mod set;
 
