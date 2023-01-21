@@ -21,23 +21,23 @@ pub trait DJGraph: DomTree {
     /// Create an empty [`Self::NodeSet`].
     fn create_node_set(&self) -> Self::NodeSet;
     /// Get an iterator over all nodes of the graph.
-    fn node_iter<'a>(&'a self) -> Self::NodeIter<'a>;
+    fn node_iter(&self) -> Self::NodeIter<'_>;
     /// Returns a reference to the D-edge storage.
     fn d_edge_cell(&self, id: Self::Identifier) -> &UnsafeCell<Self::NodeSet>;
     /// A helper function to get an iterator over D-edges of a given node.
-    fn d_edge_iter<'a>(
-        &'a self,
+    fn d_edge_iter(
+        &self,
         id: Self::Identifier,
-    ) -> <<Self as DJGraph>::NodeSet as MemberSet<Self::Identifier>>::MemberIter<'a> {
+    ) -> <<Self as DJGraph>::NodeSet as MemberSet<Self::Identifier>>::MemberIter<'_> {
         unsafe { (*self.d_edge_cell(id).get()).iter() }
     }
     /// Returns a reference to the J-edge storage.
     fn j_edge_cell(&self, id: Self::Identifier) -> &UnsafeCell<Self::NodeSet>;
     /// A helper function to get an iterator over J-edges of a given node.
-    fn j_edge_iter<'a>(
-        &'a self,
+    fn j_edge_iter(
+        &self,
         id: Self::Identifier,
-    ) -> <<Self as DJGraph>::NodeSet as MemberSet<Self::Identifier>>::MemberIter<'a> {
+    ) -> <<Self as DJGraph>::NodeSet as MemberSet<Self::Identifier>>::MemberIter<'_> {
         unsafe { (*self.j_edge_cell(id).get()).iter() }
     }
 
@@ -107,6 +107,7 @@ pub trait DJGraph: DomTree {
         for i in set.iter() {
             priority_queue.push(Item(depths.get(i), i));
         }
+        #[allow(clippy::too_many_arguments)]
         fn visit<T: DJGraph>(
             graph: &T,
             df_closure: &mut T::NodeSet,
@@ -142,7 +143,7 @@ pub trait DJGraph: DomTree {
                 &mut df_closure,
                 &mut visited,
                 &mut priority_queue,
-                &depths,
+                depths,
                 set,
                 x.1,
                 x.1,

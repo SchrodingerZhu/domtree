@@ -22,7 +22,7 @@ pub trait DominanceFrontier: DomTree {
         unsafe { &*self.frontiers_cell(id).get() }
     }
     /// Gets an iterator over all nodes of the graph.
-    fn node_iter<'a>(&'a self) -> Self::NodeIter<'a>;
+    fn node_iter(&self) -> Self::NodeIter<'_>;
 
     /// Calculate the dominance frontiers of all nodes. The immediate dominators must be
     /// calculated before calling this function. Otherwise, it will not crash but the answers can get

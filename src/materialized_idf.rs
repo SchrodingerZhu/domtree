@@ -12,7 +12,7 @@ pub trait MaterializedIDF: DJGraph<Identifier: Hash> {
     /// Returns the reference to IDF storage
     fn idf_cell(&self, id: Self::Identifier) -> &UnsafeCell<Self::MergeNodeSet>;
     /// A helper function to access idfs
-    fn ref_idf<'a>(&'a self, id: Self::Identifier) -> &Self::MergeNodeSet {
+    fn ref_idf(&self, id: Self::Identifier) -> &Self::MergeNodeSet {
         unsafe { &(*self.idf_cell(id).get()) }
     }
     /// Returns the BFS order of the DJGraph
@@ -41,7 +41,7 @@ pub trait MaterializedIDF: DJGraph<Identifier: Hash> {
     fn populate_idf(&mut self, root: Self::Identifier) {
         fn tdmsc<G: MaterializedIDF>(
             graph: &G,
-            bfs_order: &Vec<G::Identifier>,
+            bfs_order: &[G::Identifier],
             depths: &G::Set<usize>,
             hint: Option<usize>,
         ) -> (bool, usize) {

@@ -15,7 +15,7 @@ pub trait MemberSet<T> {
     fn contains(&self, target: T) -> bool;
 
     /// Iterate all members
-    fn iter<'a>(&'a self) -> Self::MemberIter<'a>;
+    fn iter(&self) -> Self::MemberIter<'_>;
 
     /// Insert a new element to the set. The data structure is expected to maintain the
     /// uniqueness of its member on itself.

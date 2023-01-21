@@ -167,10 +167,10 @@ pub trait DomTree: DFSGraph + Sized {
     /// Updates the immediate dominator identifier of the given node.
     fn set_dom(&mut self, id: Self::Identifier, target: Option<Self::Identifier>);
     /// Returns an iterator over the incoming edges of the given node.
-    fn predecessor_iter<'a>(&'a self, id: Self::Identifier) -> Self::PredecessorIter<'a>;
+    fn predecessor_iter(&self, id: Self::Identifier) -> Self::PredecessorIter<'_>;
     /// Returns an iterator over all nodes which yields the mutable references to their immediate
     /// dominator identifiers.
-    fn doms_mut<'a>(&'a mut self) -> Self::MutDomIter<'a>;
+    fn doms_mut(&mut self) -> Self::MutDomIter<'_>;
     /// Returns an iterator over all the **strict** dominators of a node.
     fn dom_iter(&self, id: Self::Identifier) -> DominatorIter<Self> {
         DominatorIter {
@@ -199,7 +199,7 @@ pub trait DomTree: DFSGraph + Sized {
                     }
                 }
             }
-            return x;
+            x
         }
         // initialize all immediate dominators to None.
         self.doms_mut().for_each(|x| *x = None);
@@ -223,8 +223,7 @@ pub trait DomTree: DFSGraph + Sized {
                 }
                 let dom = unsafe {
                     self.predecessor_iter(i)
-                        .filter(|x| post_order_map.get(*x) > order)
-                        .next()
+                        .find(|x| post_order_map.get(*x) > order)
                         // safe because we are processing in reverse post order.
                         .unwrap_unchecked()
                 };
